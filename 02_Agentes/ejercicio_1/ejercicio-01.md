@@ -1,133 +1,54 @@
-# Ejercicio 1 — Cambiar la ubicación del Wumpus y los pits
 
-## Contexto
 
-En el proyecto `Agentes/project` (Mundo de Wumpus, AIMA cap. 2 y 7) el entorno se
-describe con archivos YAML en `config/`. El agente y el simulador leen ese archivo
-para armar la cueva: tamaño de la cuadrícula, posición inicial, Wumpus, pits
-(pozos), oro y puntajes.
+# Ejercicio 1 - World of Wumpus
 
-El mapa clásico es `config/classic_4x4.yaml` (AIMA Figura 7.2):
+Acontinuación presento la propuesta de configuración para el juego del Wumpus: 
 
-```yaml
-grid:
-  width: 4
-  height: 4
+![alt text](image.png)
 
-agent:
-  start: [1, 1]
-  direction: east
-  arrows: 1
+Usando esta configuración del mundo corremos los diferentes agentes y estos fueron los resultados: 
 
-wumpus: [1, 3]
+| Modelo | Resultado | Observaciones |
+|:--------- |:-------- | :--------|
+| Simple reflex    | Se gastaron los 200 steps y no llegó al oro   | El agente se quedó en varias ocasiones subiendo y bajando por las casillas [2,1]-[2-2], pero no avanzaba más allá. En otras ocasiones se quedaba dando vueltas en [2,1]   |
+| Model Based | El agente salió con el oro, le tomó 29 steps y su score fue de 971 | - |
+| Goal-based | El agente salió con el oro, le tomó 29 step y su score fue 971 | - |
+| Utility-based | El agente salió con el oro, le tomó 34 steps y su score fue 956| Este modelo buscó matar al wumpus, por eso le tomó pasos adicionales |
+| Learning | El agente salió con el oro, le tomó 15 steps y obtuvo un score de 985| Mean score (all): 228.5 ; Mean score (last 50): 538.3 | 
 
-pits:
-  - [3, 1]
-  - [3, 3]
-  - [4, 4]
+Observamos en las pruebas que el mundo creado es adecuado, ya que existe un camino seguro que más de un modelo pudo encontrar. Para este ejemplo el único modelo que no pudo encontrar un camino fue el Simple-Reflex, este tipo de modelos estan basados únicamente es seguir una serie de reglas específicas de cómo actuar en cada situación, en este caso el agente esta configurado para voltear a la izquierda su choca con una pared o voltear a la derecha siempre que detecte peligro (brisa o hedor) por esa razón en todas las situaciones se queda dando vueltas en las casillas que identifica como seguras, solo considera el estado en el que se encuentra sin guardar memoria de por donde ha pasado ni las percepciones que ha tenido con anterioridad en otros puntos del tablero. A diferencias de los otros modelos que sí guardan el historial de su paso por el tablero, aunque cada uno persigue optimizar algo diferente, mantenerse con vida, como explorar hasta encontrar el oro, o maximizar el score obtenido. 
 
-gold: [2, 3]
-```
 
-Recuerda: las coordenadas son **1-based** y `(1, 1)` es la casilla inferior
-izquierda. `(x, y)`: `x` es la columna (izquierda→derecha) y `y` la fila
-(abajo→arriba).
-
-En este ejercicio **no vas a programar**: vas a **diseñar tu propia cueva**
-moviendo el Wumpus y los pits, y luego observar cómo cambia el comportamiento de
-los agentes.
-
-## Objetivo
-
-Crear una nueva configuración modificando la posición del **Wumpus** y de los
-**pits**, respetando las reglas del entorno, y analizar el efecto sobre los
-distintos agentes.
-
-## Archivos a crear / modificar
-
-- Crea un archivo nuevo: `Agentes/project/config/mi_cueva_4x4.yaml`.
-  Puedes partir de una copia de `config/classic_4x4.yaml`.
-
-No modifiques el código de `agents/` ni de `wumpus/`.
-
-## Requisitos del nuevo mapa
-
-1. Mantén la cuadrícula de **4x4** y el agente iniciando en `[1, 1]` mirando al
-   este.
-2. Cambia la posición del **Wumpus** a una casilla distinta de la del mapa
-   clásico.
-3. Cambia la posición de **los pits** (al menos **2** pits) a casillas distintas
-   de las del mapa clásico.
-4. Coloca el **oro** en una casilla alcanzable.
-5. El mapa debe ser **válido** según las reglas del entorno (ver más abajo). Si
-   rompes una regla, el programa lanzará un error al cargar el YAML.
-
-### Reglas de validez (obligatorias)
-
-- Todas las posiciones deben estar **dentro** de la cuadrícula (`1..4`).
-- El agente **no** puede iniciar sobre un pit ni sobre el Wumpus.
-- El **oro** no puede estar sobre un pit ni sobre el Wumpus.
-- El **Wumpus** no puede estar sobre un pit.
-- Además (para que la partida tenga sentido): deja al menos **un camino seguro**
-  desde `[1, 1]` hasta el oro y de regreso a `[1, 1]`; no rodees la salida ni el
-  oro por completo con pozos.
-
-## Pasos sugeridos
-
-1. Copia `config/classic_4x4.yaml` a `config/mi_cueva_4x4.yaml`.
-2. Dibuja en papel la cuadrícula 4x4 y marca dónde pondrás el agente, el Wumpus,
-   los pits y el oro.
-3. Edita el YAML con tus nuevas coordenadas (campos `wumpus`, `pits`, `gold`).
-4. Ejecuta primero el visor del entorno para confirmar que el mapa carga y se ve
-   como esperabas:
-
+Ahora veamos como cambia el agente Model-based al mover un pit, digamos el [1,4] lo movemos una casilla más cerca de la casilla inicial, el resultado fue el siguiente:
 ```bash
-cd Agentes/project
-python 01_wumpus_world.py --config config/mi_cueva_4x4.yaml
+Action: TurnLeft
+Step 200  Score -200.0  IN CAVE
+ 4 | .  .  .  . 
+ 3 | P  .  G  P 
+ 2 | .  .  W  . 
+ 1 | .  ^  P  . 
+      1  2  3  4
+Percept [Breeze]
+Reward -1  (max_steps)
+----------------------------------------
+Result: stopped without gold  steps=200  score=-200.0
 ```
+A diferencia del mundo inicialmente creado, el agente no alcanza el oro y termina con sus 200 steps. Este modelo sí guarda un historial de que celdas considera seguras para pasar, aunque al priorizar mantenerse vivo, evitará aventurarse a casillas que no conozca si son seguras o no, en esas situaciones regresará a una casilla segura. Si los "pits" los ponemos más cerca del inicio el agente tendrá menos lugar para explorar por lo que se quedará atorado en una zona o en una casilla que considera como seguras, sin avanzar. 
 
-5. Prueba los agentes sobre tu mapa y observa las diferencias:
 
-```bash
-python 02_simple_reflex_agent.py --config config/mi_cueva_4x4.yaml
-python 03_model_based_agent.py  --config config/mi_cueva_4x4.yaml
-python 04_goal_based_agent.py   --config config/mi_cueva_4x4.yaml
-python 05_utility_based_agent.py --config config/mi_cueva_4x4.yaml
-python 06_learning_agent.py --episodes 1500 --config config/mi_cueva_4x4.yaml
-```
+## Evidencias
 
-## Criterios de aceptación
+### Simple Reflex
+![Simple_Reflex](Simple-Reflex.png)
 
-- `config/mi_cueva_4x4.yaml` carga sin errores de validación.
-- El Wumpus y los pits están en posiciones **distintas** a las del mapa clásico.
-- Existe un camino seguro de ida y vuelta al oro (algún agente lo demuestra
-  saliendo con **puntaje positivo**).
-- El mapa cumple todas las reglas de validez.
+### Model-based
+![Model_based](<Model_based.png>)
 
-## Entrega
+### Goal-based
+![Goal_based](Goal_based.png)
 
-1. El archivo `config/mi_cueva_4x4.yaml`.
-2. Un diagrama (dibujo o ASCII) de tu cueva, indicando agente, Wumpus, pits y oro.
-3. Un breve reporte (media página) que responda:
-   - ¿Qué agentes lograron salir con el oro en tu mapa y cuáles no?
-   - ¿Por qué el **agente de reflejo simple** falla (o tiene suerte) en tu diseño?
-   - ¿Cómo cambia el resultado del **agente basado en modelo** si acercas o alejas
-     un pit de la casilla inicial?
-4. Evidencias (captura de pantalla) de haber corrido los 4 agentes con tus nueva configuración del mundo.
+### Utility-based
+![Utility_based](Utility_based.png)
 
-## Reto opcional
-
-- Diseña una segunda variante (`config/mi_cueva_dificil_4x4.yaml`) en la que el
-  **Wumpus bloquee el único camino seguro** hacia el oro. Observa que el agente
-  basado en modelo se queda girando, mientras que el agente basado en metas
-  (`04_goal_based_agent.py`) **dispara** para destrabar el paso.
-
-## Pistas
-
-- Un **pit** produce *breeze* (brisa) en sus casillas vecinas (arriba, abajo,
-  izquierda, derecha). El **Wumpus** produce *stench* (hedor) en sus vecinas.
-  Ubícalos pensando en qué percibirá el agente.
-- Si el YAML da error al cargar, lee el mensaje: casi siempre indica exactamente
-  qué regla rompiste (posición fuera de rango, solapamiento, etc.).
-- Empieza con cambios pequeños (mover un pit una casilla) y ve aumentando la
-  dificultad.
+### Learning
+![learning](learning.png)
