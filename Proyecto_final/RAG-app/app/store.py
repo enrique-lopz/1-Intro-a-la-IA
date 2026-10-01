@@ -12,9 +12,9 @@ coleccion = chroma_client.get_or_create_collection(name="documentos_rag", metada
 
 def agregar_chunks(ids: list[str], documentos: list[str], embeddings: list[list[float]], metadatos: list[dict]):
     """
-    Agrega los chunks de texto, vectores de Google AI y metadatos a ChromaDB.
+    Agrega o actualiza los chunks de texto, vectores de Google AI y metadatos en ChromaDB.
     """
-    coleccion.add(
+    coleccion.upsert(
         ids=ids,                  # Identificador único para cada chunk (ej. "doc1_chunk1")
         documents=documentos,     # El texto real del chunk
         embeddings=embeddings,    # Los vectores generados por Google AI

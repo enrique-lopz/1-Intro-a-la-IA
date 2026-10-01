@@ -66,11 +66,21 @@ def generar_respuesta(
     """
     
     try:
-        # 5. Llamar al modelo de Gemini usando el nuevo cliente
-        respuesta = cliente.models.generate_content(
-            model='gemini-3.5-flash',
-            contents=prompt
-        )
+        # 5. Llamar al modelo de Gemini usando el nuevo cliente (con fallback si hay sobrecarga 503)
+        try:
+            respuesta = cliente.models.generate_content(
+                model='gemini-3.5-flash',
+                contents=prompt
+            )
+        except Exception as e_flash:
+            if "503" in str(e_flash) or "UNAVAILABLE" in str(e_flash):
+                respuesta = cliente.models.generate_content(
+                    model='gemini-3.6-flash',
+                    contents=prompt
+                )
+            else:
+                raise e_flash
+
         texto_final = respuesta.text.strip()
         
         # 6. Evaluar si el modelo decidió abstenerse basándonos en la frase clave

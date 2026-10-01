@@ -1,5 +1,6 @@
 import os
 import math
+import time
 from dotenv import load_dotenv
 # 1. Importación corregida para el nuevo SDK 'google-genai'
 from google import genai
@@ -12,17 +13,61 @@ load_dotenv()
 # Como tu proyecto exige usar "GOOGLE_API_KEY", se la pasamos explícitamente.
 cliente = genai.Client()
 
+def get_embeddings_batch(
+    texts: list[str], 
+    batch_size: int = 20, 
+    pausa_segundos: float = 1.5, 
+    max_reintentos: int = 4
+) -> list[list[float]]:
+    """
+    Obtiene los vectores de incrustación (embeddings) para una lista de textos
+    procesándolos en lotes (batches), con pausas preventivas entre lotes y 
+    mecanismo de reintento exponencial (exponential backoff) en caso de error 429.
+    """
+    if not texts:
+        return []
+        
+    todos_los_embeddings = []
+    total_lotes = (len(texts) + batch_size - 1) // batch_size
+    
+    for indice_lote, i in enumerate(range(0, len(texts), batch_size)):
+        lote = texts[i : i + batch_size]
+        
+        # Reintentos con exponential backoff en caso de cuota 429
+        respuesta = None
+        for intento in range(max_reintentos):
+            try:
+                respuesta = cliente.models.embed_content(
+                    model="gemini-embedding-001",
+                    contents=lote
+                )
+                break
+            except Exception as e:
+                es_error_cuota = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)
+                if es_error_cuota and intento < max_reintentos - 1:
+                    # Espera progresiva de 5s, 10s, 20s para permitir que la ventana de 15 RPM se restablezca
+                    tiempo_espera = 5 * (2 ** intento)
+                    print(f"Aviso: Límite de cuota alcanzado (429). Esperando {tiempo_espera}s antes de reintentar (intento {intento + 1}/{max_reintentos})...")
+                    time.sleep(tiempo_espera)
+                else:
+                    raise e
+                    
+        # Extraemos los vectores del lote
+        for emb in respuesta.embeddings:
+            todos_los_embeddings.append(emb.values)
+            
+        # Pausa preventiva entre lotes (si no es el último lote) para no saturar los 15 RPM
+        if indice_lote < total_lotes - 1 and pausa_segundos > 0:
+            time.sleep(pausa_segundos)
+            
+    return todos_los_embeddings
+
 def get_embedding(text: str) -> list[float]:
     """
-    Envía texto a Google AI y devuelve su vector (lista de flotantes).
+    Envía un solo texto a Google AI y devuelve su vector (lista de flotantes).
     """
-    # 3. La nueva forma de llamar al modelo de embeddings
-    respuesta = cliente.models.embed_content(
-        model="gemini-embedding-001",
-        contents=text
-    )
-    # 4. Accedemos a los valores del vector en la nueva estructura de respuesta
-    return respuesta.embeddings[0].values
+    vectores = get_embeddings_batch([text], batch_size=1, pausa_segundos=0.0)
+    return vectores[0]
 
 def calcular_similitud_coseno(vec1: list[float], vec2: list[float]) -> float:
     """

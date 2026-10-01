@@ -10,30 +10,51 @@ st.markdown("Interfaz gráfica para consultar documentos indexados.")
 # --- Barra lateral: Carga e Ingesta de Documentos ---
 with st.sidebar:
     st.header("1. Cargar Documentos")
-    st.info("Sube un archivo de texto para indexarlo en ChromaDB.")
+    st.info("Sube uno o varios archivos de texto (.txt) o PDF (.pdf) para indexarlos en ChromaDB.")
     
-    archivo_subido = st.file_uploader("Sube un archivo (.txt)", type=["txt"])
+    archivos_subidos = st.file_uploader(
+        "Sube uno o varios archivos (.txt o .pdf)", 
+        type=["txt", "pdf"],
+        accept_multiple_files=True
+    )
     
-    if st.button("Indexar Documento") and archivo_subido is not None:
-        # Extraemos el texto del archivo
-        contenido = archivo_subido.read().decode("utf-8")
-        payload = {
-            "nombre_archivo": archivo_subido.name,
-            "contenido_texto": contenido
-        }
-        
-        try:
-            with st.spinner("Procesando, particionando e indexando..."):
-                # Llamada HTTP POST al endpoint /ingest
-                res = requests.post(f"{API_URL}/ingest", json=payload)
-                
-            if res.status_code == 200:
-                datos = res.json()
-                st.success(f"¡Indexación exitosa! {datos['chunks_indexados']} chunks creados en ChromaDB.")
-            else:
-                st.error(f"Error de la API: {res.text}")
-        except requests.exceptions.ConnectionError:
-            st.error("Error: No se pudo conectar con la API. ¿Está FastAPI corriendo en el puerto 8000?")
+    if st.button("Indexar Documentos"):
+        if not archivos_subidos:
+            st.warning("Por favor selecciona al menos un archivo antes de indexar.")
+        else:
+            try:
+                with st.spinner("Procesando, extrayendo texto e indexando en ChromaDB..."):
+                    # Llamada HTTP POST multipart con la lista de archivos a /ingest-files
+                    archivos_multipart = [
+                        ("files", (arch.name, arch.getvalue(), arch.type or "application/octet-stream"))
+                        for arch in archivos_subidos
+                    ]
+                    res = requests.post(f"{API_URL}/ingest-files", files=archivos_multipart)
+                    
+                if res.status_code == 200:
+                    datos = res.json()
+                    st.success(
+                        f"¡Indexación exitosa! {datos['documentos_indexados']} documento(s) indexado(s) "
+                        f"({datos['chunks_indexados']} chunks creados en ChromaDB)."
+                    )
+                    
+                    if datos.get("archivos_exitosos"):
+                        st.markdown("**Archivos indexados correctamente:**")
+                        for arch in datos["archivos_exitosos"]:
+                            st.markdown(f"- ✅ `{arch}`")
+                    
+                    if datos.get("archivos_omitidos"):
+                        st.warning("⚠️ **Archivos omitidos:**")
+                        for omitido in datos["archivos_omitidos"]:
+                            st.markdown(f"- **`{omitido['nombre']}`**: {omitido['motivo']}")
+                else:
+                    try:
+                        detalle = res.json().get("detail", res.text)
+                    except Exception:
+                        detalle = res.text
+                    st.error(f"Error de la API: {detalle}")
+            except requests.exceptions.ConnectionError:
+                st.error("Error: No se pudo conectar con la API. ¿Está FastAPI corriendo en el puerto 8000?")
 
 # --- Área principal: Consulta y Generación ---
 st.header("2. Consultar al Sistema")
